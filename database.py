@@ -1,122 +1,124 @@
+#Importaciones
 import os
-import asyncio
-import asyncpg
-from typing import AsyncGenerator, Optional 
-from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, DateTime, Text, select
-from sqlalchemy.orm import sessionmaker, declarative_base, DeclarativeBase, Mapped, mapped_column
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker, AsyncAttrs
-
+from typing import Optional, List
 from datetime import datetime
-from sqlalchemy.pool import AsyncAdaptedQueuePool
-
+from sqlalchemy.ext.asyncio import (
+    create_async_engine, 
+    AsyncSession, 
+    async_sessionmaker, 
+    AsyncAttrs
+)
+from sqlalchemy.orm import (
+    DeclarativeBase, 
+    Mapped, 
+    mapped_column, 
+    relationship
+)
+from sqlalchemy import String, Float, Text, ForeignKey, func, Boolean
 from dotenv import load_dotenv
 
+# Cargar variables de entorno
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-#engine = create_engine(DATABASE_URL)
-# Creación del motor asíncrono con pool_pre_ping para verificar conexiones muertas
+# Creación del Motor Asíncrono (Async Engine)
+# pool_size: Mantiene conexiones vivas listas para usar.
+# max_overflow: Permite picos temporales de tráfico.
 engine = create_async_engine(
     DATABASE_URL,
-    pool_size=10,
-    max_overflow=20,
-    pool_pre_ping=True,
-    pool_recycle=3600,
-    echo=False  # Cambiar a True para depurar SQL en desarrollo
+    echo=False,  # Cambiar a True para ver SQL en logs durante desarrollo
+    pool_size=20,
+    max_overflow=10
 )
 
-#SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-# Constructor de sesiones asíncronas
+# Fábrica de Sesiones Asíncronas
+# expire_on_commit=False es OBLIGATORIO en async para evitar errores de I/O implícito
+# al acceder a atributos después de un commit.
 AsyncSessionLocal = async_sessionmaker(
     bind=engine,
     class_=AsyncSession,
-    expire_on_commit=False,  # Evita errores de lazy-loading en contexto async
+    expire_on_commit=False,
     autoflush=False
 )
 
-Base = declarative_base()
-
-class Base(AsyncAttrs, DeclarativeBase):
-    """Clase base moderna que incluye soporte para atributos asíncronos."""
-    pass
-
-class AgentLog(Base):
-    __tablename__ = "agent_logs"
-
-    # Definición con Mapped y mapped_column (Estándar 2.0)
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    user_input: Mapped[str] = mapped_column(String(500), nullable=False)
-    agent_output: Mapped[str] = mapped_column(String(2000), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-
-class User(Base):
-    __tablename__ = "users"
-    #id = Column(Integer, primary_key=True, index=True)
-    id: Mapped[int] = mapped_column(Integer,primary_key=True, autoincrement=True, index=True)
-    #google_sub = Column(String, unique=True, index=True)
-    google_sub: Mapped[str] = mapped_column(String, unique=True, index=True)
-    email: Mapped[str] = mapped_column(String, unique=True)
-    name: Mapped[str] = mapped_column(String)
-    picture: Mapped[str] = mapped_column(String)
-
-class ClienteEmpresa(Base):
-    __tablename__ = "clientes_empresa"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
-    ruc_empresa: Mapped[str] = mapped_column(String, index=True)
-    nombre_empresa: Mapped[str] = mapped_column(String, index=False)
-
-class DetalleCliente(Base):
-    __tablename__ = "detalle_cliente"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
-    ruc_empresa: Mapped[str] = mapped_column(String, index=True)
-    monto_transacciones: Mapped[float] = mapped_column(Float, default=0.0)
-    saldo_pasivo: Mapped[float] = mapped_column(Float, default=0.0)
-    saldo_activo: Mapped[float] = mapped_column(Float, default=0.0)
-    uso_de_app: Mapped[int] = mapped_column(Integer, default=0)
-    prediccion_compra: Mapped[float] = mapped_column(Float, default=0.0)
-    hizo_compra: Mapped[float] = mapped_column(Float, default=0.0)
-
-class ChatHistory(Base):
-    __tablename__ = "chat_history"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
-    user_sub: Mapped[str] = mapped_column(String, index=True) # Vinculado al Google Sub del usuario
-    query: Mapped[str] = mapped_column(Text)
-    response: Mapped[str] = mapped_column(Text)
-    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-
-class ToolsHistory(Base):
-    __tablename__ = "tools_history"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
-    user_sub: Mapped[str] = mapped_column(String, index=True) # Vinculado al Google Sub del usuario
-    name: Mapped[str] = mapped_column(String, index=False)
-    args: Mapped[str] = mapped_column(Text)
-    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-
-
-#def init_db():
-#    Base.metadata.create_all(bind=engine)
-
-#async def init_db():
-#    async with engine.begin() as conn:
-#        #await conn.run_sync(Base.metadata.drop_all)
-#        await conn.run_sync(Base.metadata.create_all)
-
-#def get_db():
-#    db = SessionLocal()
-#    try:
-#        yield db
-#    finally:
-#        db.close()
-
-# Dependencia para inyectar la base de datos en las rutas de FastAPI [8, 20]
-async def get_db() -> AsyncGenerator:
-    """Inyección de dependencia de sesión asíncrona."""
+# --- Inyección de Dependencias para FastAPI ---
+async def get_db():
+    """
+    Generador asíncrono de sesiones de base de datos.
+    Garantiza que la sesión se cierre correctamente después de cada request.
+    """
     async with AsyncSessionLocal() as session:
         try:
             yield session
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            raise
         finally:
             await session.close()
+
+
+# --- Definición de Modelos (Sintaxis SQLAlchemy 2.0) ---
+class Base(AsyncAttrs, DeclarativeBase):
+    """
+    Clase base para todos los modelos ORM.
+    AsyncAttrs permite el uso de.awaitable_attrs para carga perezosa si fuera estrictamente necesario.
+    """
+    pass
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    google_sub: Mapped[str] = mapped_column(String, unique=True, index=True)
+    email: Mapped[str] = mapped_column(String, unique=True, index=True)class ChatHistory(Base):
+    __tablename__ = "chat_history"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_sub: Mapped[str] = mapped_column(ForeignKey("users.google_sub"))
+    query: Mapped[str] = mapped_column(Text)
+    response: Mapped[str] = mapped_column(Text)
+    timestamp: Mapped[datetime] = mapped_column(server_default=func.now())
+
+    user: Mapped["User"] = relationship(back_populates="chat_history")
+
+class ChatHistory(Base):
+    __tablename__ = "chat_history"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_sub: Mapped[str] = mapped_column(ForeignKey("users.google_sub"))
+    query: Mapped[str] = mapped_column(Text)
+    response: Mapped[str] = mapped_column(Text)
+    timestamp: Mapped[datetime] = mapped_column(server_default=func.now())
+
+    user: Mapped["User"] = relationship(back_populates="chat_history")
+
+class ToolsHistory(Base):
+    __tablename__ = "tools_history"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_sub: Mapped[str] = mapped_column(ForeignKey("users.google_sub"))
+    name: Mapped[str] = mapped_column(String)
+    args: Mapped[str] = mapped_column(Text)
+    timestamp: Mapped[datetime] = mapped_column(server_default=func.now())
+
+    user: Mapped["User"] = relationship(back_populates="tools_history")
+
+class ClienteEmpresa(Base):
+    __tablename__ = "cliente_empresa"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    ruc_empresa: Mapped[str] = mapped_column(String(11), unique=True, index=True)
+    nombre_empresa: Mapped[str] = mapped_column(String, index=True)
+    hizo_compra: Mapped[bool] = mapped_column(Boolean, default=False)
+
+class DetalleCliente(Base):
+    __tablename__ = "detalle_cliente"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    ruc_empresa: Mapped[str] = mapped_column(ForeignKey("cliente_empresa.ruc_empresa"), unique=True)
+    monto_transacciones: Mapped[float] = mapped_column(Float, default=0.0)
+    saldo_activo: Mapped[float] = mapped_column(Float, default=0.0)
+    saldo_pasivo: Mapped[float] = mapped_column(Float, default=0.0)
+    uso_de_app: Mapped[int] = mapped_column(default=0)
+    prediccion_compra: Mapped[float] = mapped_column(Float, default=0.0)
+    hizo_compra: Mapped[int] = mapped_column(default=0)
+
+
