@@ -11,11 +11,9 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.config import Config
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, asc
 
 from dotenv import load_dotenv
-
-# Importaciones locales
 from database import (
     get_db, engine, Base, User, ChatHistory, ToolsHistory, ClienteEmpresa
 )
@@ -25,14 +23,14 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# --- Ciclo de Vida (Lifespan) ---
+# --- Ciclo de Vida asincrono ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Inicio: Crear tablas
+    # Crear tablas
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield
-    # Cierre: Limpiar conexiones
+    # Limpiar conexiones
     await engine.dispose()
 
 app = FastAPI(title="AI Agent API", lifespan=lifespan)
@@ -104,19 +102,17 @@ async def chat_endpoint(request: Request, db: AsyncSession = Depends(get_db)):
     data = await request.json()
     query_text = data.get("message")
     
-    # 1. Ejecutar Agente (Graph)
-    # create_agent devuelve un estado con la clave "messages"
     try:
+        # 1. Iniciamos el agente
         response_state = await run_agent_query(query_text, user['sub'])
         messages = response_state.get("messages",)
         
-        # Obtener la última respuesta del asistente
+        # 2. Obtenemos la última respuesta
         final_response = "No response"
         if messages:
             final_response = messages[-1].content
             
-        # 2. Registrar Herramientas Usadas
-        # Iteramos los mensajes para buscar llamadas a herramientas
+        # 3. Almacenamos herramientas usadas
         for msg in messages:
             if hasattr(msg, 'tool_calls') and msg.tool_calls:
                 for tool_call in msg.tool_calls:
@@ -127,7 +123,7 @@ async def chat_endpoint(request: Request, db: AsyncSession = Depends(get_db)):
                     )
                     db.add(new_tool_log)
         
-        # 3. Guardar Historial Chat
+        # 4. Y tambien guardamos el historial de chat
         new_chat = ChatHistory(
             user_sub=user['sub'],
             query=query_text,
@@ -143,6 +139,7 @@ async def chat_endpoint(request: Request, db: AsyncSession = Depends(get_db)):
         logger.error(f"Error en chat: {e}")
         return {"response": "Error interno procesando tu solicitud.", "error": str(e)}
 
+# --- API para obtener el historial de chat ---
 @app.get("/api/history")
 async def get_history(request: Request, db: AsyncSession = Depends(get_db)):
     user = request.session.get('user')
@@ -152,6 +149,7 @@ async def get_history(request: Request, db: AsyncSession = Depends(get_db)):
     result = await db.execute(stmt)
     return result.scalars().all()
 
+# --- API para obtener el historial de herramientas usadas---
 @app.get("/api/toolshistory")
 async def get_tools_history(request: Request, db: AsyncSession = Depends(get_db)):
     user = request.session.get('user')

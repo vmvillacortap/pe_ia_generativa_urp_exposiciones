@@ -2,7 +2,7 @@ import ssl
 import os
 from typing import Optional, List
 from datetime import datetime
-
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import (
     create_async_engine, 
     AsyncSession, 
@@ -18,24 +18,10 @@ from sqlalchemy.orm import (
 from sqlalchemy import String, Float, Text, ForeignKey, func, Boolean
 from dotenv import load_dotenv
 
-# Cargar variables de entorno
 load_dotenv()
 
-# --- Configuración de la Base de Datos ---
-# Se utiliza el esquema 'postgresql+asyncpg' para habilitar el driver asíncrono.
-# Es fundamental que la URL apunte a una instancia PostgreSQL válida.
-DATABASE_URL = os.getenv(
-    "DATABASE_URL", 
-    "postgresql+asyncpg://postgres:postgres@localhost:5432/ai_agent_db"
-)
-
-# Creación del Motor Asíncrono (Async Engine)
-# pool_size: Mantiene conexiones vivas listas para usar.
-# max_overflow: Permite picos temporales de tráfico.
-#ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
-#ssl_context.verify_mode = ssl.CERT_REQUIRED
-
-from sqlalchemy.engine import make_url
+# --- Configuración de la Base de Datos
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:postgres@localhost:5432/ai_agent_db")
 
 def sanitize_and_configure(url_string):
     # Convertir string a objeto URL mutable
@@ -56,20 +42,18 @@ def sanitize_and_configure(url_string):
     
     return clean_url
 
-# Uso
+# Creación del Motor Asíncrono
 clean_url = sanitize_and_configure(DATABASE_URL)
 engine = create_async_engine(
     clean_url,
     #connect_args={"ssl": ssl_context},
     pool_pre_ping=True,
-    echo=True,  # Cambiar a True para ver SQL en logs durante desarrollo
+    echo=True,  # para que se vean las interacciones de la base de datos en el log 
     pool_size=20,
     max_overflow=10
 )
 
 # Fábrica de Sesiones Asíncronas
-# expire_on_commit=False es OBLIGATORIO en async para evitar errores de I/O implícito
-# al acceder a atributos después de un commit.
 AsyncSessionLocal = async_sessionmaker(
     bind=engine,
     class_=AsyncSession,
@@ -77,11 +61,10 @@ AsyncSessionLocal = async_sessionmaker(
     autoflush=False
 )
 
-# --- Inyección de Dependencias para FastAPI ---
+# --- Inyección de Dependencias para FastAPI
 async def get_db():
     """
-    Generador asíncrono de sesiones de base de datos.
-    Garantiza que la sesión se cierre correctamente después de cada request.
+    Generador asíncrono, garantiza que la sesión se cierre correctamente después de cada request.
     """
     async with AsyncSessionLocal() as session:
         try:
@@ -89,12 +72,10 @@ async def get_db():
         finally:
             await session.close()
 
-# --- Definición de Modelos (Sintaxis SQLAlchemy 2.0) ---
-
+# --- Definición de Modelos
 class Base(AsyncAttrs, DeclarativeBase):
     """
-    Clase base para todos los modelos ORM.
-    AsyncAttrs permite el uso de.awaitable_attrs para carga perezosa si fuera estrictamente necesario.
+    Clase base para permitir atributos asincronos en carga lazy
     """
     pass
 
@@ -106,9 +87,9 @@ class User(Base):
     email: Mapped[str] = mapped_column(String, unique=True, index=True)
     name: Mapped[str] = mapped_column(String)
     picture: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    #created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
-    # Relaciones tipadas explícitamente
+    # Relaciones
     chat_history: Mapped[List["ChatHistory"]] = relationship(back_populates="user")
     tools_history: Mapped[List["ToolsHistory"]] = relationship(back_populates="user")
 
@@ -119,7 +100,8 @@ class ChatHistory(Base):
     user_sub: Mapped[str] = mapped_column(ForeignKey("users.google_sub"))
     query: Mapped[str] = mapped_column(Text)
     response: Mapped[str] = mapped_column(Text)
-    timestamp: Mapped[datetime] = mapped_column(server_default=func.now())
+    #timestamp: Mapped[datetime] = mapped_column(server_default=func.now())
+    timestamp: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
     user: Mapped["User"] = relationship(back_populates="chat_history")
 
@@ -130,12 +112,13 @@ class ToolsHistory(Base):
     user_sub: Mapped[str] = mapped_column(ForeignKey("users.google_sub"))
     name: Mapped[str] = mapped_column(String)
     args: Mapped[str] = mapped_column(Text)
-    timestamp: Mapped[datetime] = mapped_column(server_default=func.now())
+    #timestamp: Mapped[datetime] = mapped_column(server_default=func.now())
+    timestamp: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
     user: Mapped["User"] = relationship(back_populates="tools_history")
 
 class ClienteEmpresa(Base):
-    __tablename__ = "cliente_empresa"
+    __tablename__ = "clientes_empresa"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     ruc_empresa: Mapped[str] = mapped_column(String(11), unique=True, index=True)
