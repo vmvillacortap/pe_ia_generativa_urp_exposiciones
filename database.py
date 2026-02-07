@@ -1,7 +1,8 @@
-#Importaciones
+import ssl
 import os
 from typing import Optional, List
 from datetime import datetime
+
 from sqlalchemy.ext.asyncio import (
     create_async_engine, 
     AsyncSession, 
@@ -19,14 +20,49 @@ from dotenv import load_dotenv
 
 # Cargar variables de entorno
 load_dotenv()
-DATABASE_URL = os.getenv("DATABASE_URL")
+
+# --- Configuración de la Base de Datos ---
+# Se utiliza el esquema 'postgresql+asyncpg' para habilitar el driver asíncrono.
+# Es fundamental que la URL apunte a una instancia PostgreSQL válida.
+DATABASE_URL = os.getenv(
+    "DATABASE_URL", 
+    "postgresql+asyncpg://postgres:postgres@localhost:5432/ai_agent_db"
+)
 
 # Creación del Motor Asíncrono (Async Engine)
 # pool_size: Mantiene conexiones vivas listas para usar.
 # max_overflow: Permite picos temporales de tráfico.
+#ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+#ssl_context.verify_mode = ssl.CERT_REQUIRED
+
+from sqlalchemy.engine import make_url
+
+def sanitize_and_configure(url_string):
+    # Convertir string a objeto URL mutable
+    url_obj = make_url(url_string)
+    
+    # Asegurar el driver correcto
+    if url_obj.drivername == 'postgres':
+        url_obj = url_obj._replace(drivername='postgresql+asyncpg')
+    
+    # Extraer y eliminar 'sslmode' de los query params
+    query_dict = dict(url_obj.query)
+    if 'sslmode' in query_dict:
+        # Loguear advertencia si es necesario
+        del query_dict['sslmode']
+    
+    # Reconstruir la URL limpia
+    clean_url = url_obj._replace(query=query_dict)
+    
+    return clean_url
+
+# Uso
+clean_url = sanitize_and_configure(DATABASE_URL)
 engine = create_async_engine(
-    DATABASE_URL,
-    echo=False,  # Cambiar a True para ver SQL en logs durante desarrollo
+    clean_url,
+    #connect_args={"ssl": ssl_context},
+    pool_pre_ping=True,
+    echo=True,  # Cambiar a True para ver SQL en logs durante desarrollo
     pool_size=20,
     max_overflow=10
 )
@@ -53,8 +89,8 @@ async def get_db():
         finally:
             await session.close()
 
-
 # --- Definición de Modelos (Sintaxis SQLAlchemy 2.0) ---
+
 class Base(AsyncAttrs, DeclarativeBase):
     """
     Clase base para todos los modelos ORM.
@@ -62,22 +98,19 @@ class Base(AsyncAttrs, DeclarativeBase):
     """
     pass
 
-
 class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     google_sub: Mapped[str] = mapped_column(String, unique=True, index=True)
-    email: Mapped[str] = mapped_column(String, unique=True, index=True)class ChatHistory(Base):
-    __tablename__ = "chat_history"
+    email: Mapped[str] = mapped_column(String, unique=True, index=True)
+    name: Mapped[str] = mapped_column(String)
+    picture: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    user_sub: Mapped[str] = mapped_column(ForeignKey("users.google_sub"))
-    query: Mapped[str] = mapped_column(Text)
-    response: Mapped[str] = mapped_column(Text)
-    timestamp: Mapped[datetime] = mapped_column(server_default=func.now())
-
-    user: Mapped["User"] = relationship(back_populates="chat_history")
+    # Relaciones tipadas explícitamente
+    chat_history: Mapped[List["ChatHistory"]] = relationship(back_populates="user")
+    tools_history: Mapped[List["ToolsHistory"]] = relationship(back_populates="user")
 
 class ChatHistory(Base):
     __tablename__ = "chat_history"
@@ -120,5 +153,3 @@ class DetalleCliente(Base):
     uso_de_app: Mapped[int] = mapped_column(default=0)
     prediccion_compra: Mapped[float] = mapped_column(Float, default=0.0)
     hizo_compra: Mapped[int] = mapped_column(default=0)
-
-
