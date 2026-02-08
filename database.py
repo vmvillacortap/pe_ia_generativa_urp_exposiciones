@@ -123,13 +123,13 @@ class ClienteEmpresa(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     ruc_empresa: Mapped[str] = mapped_column(String(11), unique=True, index=True)
     nombre_empresa: Mapped[str] = mapped_column(String, index=True)
-    hizo_compra: Mapped[bool] = mapped_column(Boolean, default=False)
+    #hizo_compra: Mapped[bool] = mapped_column(Boolean, default=False)
 
 class DetalleCliente(Base):
     __tablename__ = "detalle_cliente"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    ruc_empresa: Mapped[str] = mapped_column(ForeignKey("cliente_empresa.ruc_empresa"), unique=True)
+    ruc_empresa: Mapped[str] = mapped_column(String(11), unique=True, index=True)
     monto_transacciones: Mapped[float] = mapped_column(Float, default=0.0)
     saldo_activo: Mapped[float] = mapped_column(Float, default=0.0)
     saldo_pasivo: Mapped[float] = mapped_column(Float, default=0.0)

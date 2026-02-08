@@ -10,7 +10,6 @@ from langgraph.checkpoint.memory import MemorySaver
 from pydantic import BaseModel, Field, ConfigDict
 try:
     from database import AsyncSessionLocal, ClienteEmpresa, DetalleCliente
-    print("0"*100 + " Importacion database exitosa")
 except ImportError:
     AsyncSessionLocal = None
     ClienteEmpresa = None
@@ -43,6 +42,7 @@ async def detalle_cliente(nombre_empresa: str) -> str:
     Ejemplo: 'plaza vea' -> '20608300393'
     """
     if AsyncSessionLocal is None:
+        #print("0"*200)
         return "Error: No se pudo cargar la configuración de la base de datos."
         
     async with AsyncSessionLocal() as db:
@@ -54,40 +54,41 @@ async def detalle_cliente(nombre_empresa: str) -> str:
             cliente_ruc = result.scalars().first()
 
             if not cliente_ruc:
-                return "No contamos con el registro de RUC para esta empresa."
+                #print("1"*200)
+                return f"No contamos con el registro de RUC para la empresa '{nombre_empresa}'. Por favor, verifica el nombre o intenta con otro término de búsqueda."
 
-            return cliente_ruc.ruc_empresa
+            return f"El RUC para '{nombre_empresa}' es: {cliente_ruc.ruc_empresa}. Ahora puedes usar este RUC con la herramienta 'consultar_cliente'."
 
         except Exception as e:
+            #print("2"*200, str(e))
             return f"Error consultando detalles del cliente: {str(e)}"
 
 @tool(args_schema=ConsultarClienteInput)
 async def consultar_cliente(ruc_empresa: str) -> str:
     """
     Consulta la base de datos financiera para obtener métricas de valor de una empresa.
-    Requiere un RUC válido de 11 dígitos.
+    Requiere un RUC válido de 11 dígitos. Si no tienes el RUC, usa 'detalle_cliente' primero.
     """
     if AsyncSessionLocal is None:
+        #print("3"*200)
         return "Error: No se pudo cargar la configuración de la base de datos."
 
-    print("1"*100 + " Sin error en conexion base de datos")
-
-    # Validación simple de formato
-    if not (ruc_empresa.startswith("10") or ruc_empresa.startswith("20")) or len(ruc_empresa)!= 11:
-        print("2"*100 + " No es un ruc ", ruc_empresa)
-        return "ERROR: Formato de RUC inválido. Debes buscar el RUC primero usando la herramienta 'detalle_cliente'."
+    # Validación de formato: debe ser numérico y tener 11 dígitos
+    if not (ruc_empresa.startswith("10") or ruc_empresa.startswith("20")) or len(ruc_empresa)!= 11 or not ruc_empresa.isdigit():
+        #print("4"*200)
+        return f"ERROR: El valor '{ruc_empresa}' no es un RUC válido (debe tener 11 dígitos numéricos). Por favor, obtén el RUC correcto usando la herramienta 'detalle_cliente' ingresando el nombre de la empresa."
 
     async with AsyncSessionLocal() as db:
         try:
             stmt = select(DetalleCliente).where(
-                DetalleCliente.ruc_empresa.ilike(f"%{ruc_empresa}%")
+                DetalleCliente.ruc_empresa == ruc_empresa
             )
             result = await db.execute(stmt)
             cliente = result.scalars().first()
 
             if not cliente:
-                print("3"*100 + " No cruza en base de datos ")
-                return "No se encontró información financiera para esta empresa en la base de datos."
+                #print("5"*200)
+                return f"No se encontró información financiera para el RUC {ruc_empresa}. Si crees que es un error, intenta buscar el RUC de nuevo con 'detalle_cliente' para confirmar que sea el correcto."
 
             hizo_compra_str = 'Sí' if cliente.hizo_compra else 'No'
             
@@ -101,7 +102,9 @@ async def consultar_cliente(ruc_empresa: str) -> str:
                 - ¿Cliente Comprador?: {hizo_compra_str}
             """
         except Exception as e:
+            #print("6"*200)
             return f"Error recuperando datos financieros: {str(e)}"
+
 
 # --- Configuración del Agente ---
 
