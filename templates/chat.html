@@ -207,8 +207,13 @@
                     const card = document.createElement('div');
                     card.className = "bg-slate-800 rounded-lg p-4 border border-slate-700 hover:border-slate-600 transition-colors group";
                     
-                    // Formateo de fecha
-                    const timeStr = new Date(tool.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+                    // MODIFICADO: Formateo de fecha forzado a GMT-5 (America/Lima)
+                    const timeStr = new Date(tool.timestamp).toLocaleTimeString('es-PE', {
+                        hour: '2-digit', 
+                        minute:'2-digit', 
+                        second:'2-digit',
+                        timeZone: 'America/Lima' // GMT-5
+                    });
                     
                     // Limpieza de argumentos (si es muy largo)
                     let argsDisplay = makeLinksClickableDark(tool.args);
@@ -247,7 +252,12 @@
                     const card = document.createElement('div');
                     card.className = "bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300";
                     
-                    const timeStr = new Date(item.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                    // MODIFICADO: Formateo de fecha forzado a GMT-5 (America/Lima)
+                    const timeStr = new Date(item.timestamp).toLocaleTimeString('es-PE', {
+                        hour: '2-digit', 
+                        minute:'2-digit',
+                        timeZone: 'America/Lima' // GMT-5
+                    });
                     
                     // Procesar enlaces en la respuesta
                     const fullResponseWithLinks = makeLinksClickable(item.response);

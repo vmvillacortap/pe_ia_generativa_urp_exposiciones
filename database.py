@@ -15,8 +15,9 @@ from sqlalchemy.orm import (
     mapped_column, 
     relationship
 )
-from sqlalchemy import String, Float, Text, ForeignKey, func, Boolean
+from sqlalchemy import String, Float, Text, ForeignKey, func, Boolean, DateTime
 from dotenv import load_dotenv
+from zoneinfo import ZoneInfo  # Nuevo: Para manejar la zona horaria
 
 load_dotenv()
 
@@ -73,6 +74,11 @@ async def get_db():
             await session.close()
 
 # --- Definición de Modelos
+
+# Zona horaria Peru
+def get_peru_time():
+    return datetime.now(ZoneInfo("America/Lima"))
+
 class Base(AsyncAttrs, DeclarativeBase):
     """
     Clase base para permitir atributos asincronos en carga lazy
@@ -101,7 +107,7 @@ class ChatHistory(Base):
     query: Mapped[str] = mapped_column(Text)
     response: Mapped[str] = mapped_column(Text)
     #timestamp: Mapped[datetime] = mapped_column(server_default=func.now())
-    timestamp: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=get_peru_time)
 
     user: Mapped["User"] = relationship(back_populates="chat_history")
 
@@ -113,7 +119,7 @@ class ToolsHistory(Base):
     name: Mapped[str] = mapped_column(String)
     args: Mapped[str] = mapped_column(Text)
     #timestamp: Mapped[datetime] = mapped_column(server_default=func.now())
-    timestamp: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=get_peru_time)
 
     user: Mapped["User"] = relationship(back_populates="tools_history")
 
