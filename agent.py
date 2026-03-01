@@ -8,6 +8,8 @@ from langchain_core.tools import tool
 from langchain.agents import create_agent
 from langgraph.checkpoint.memory import MemorySaver
 from pydantic import BaseModel, Field, ConfigDict
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
 try:
     from database import AsyncSessionLocal, ClienteEmpresa, DetalleCliente
 except ImportError:
@@ -15,7 +17,9 @@ except ImportError:
     ClienteEmpresa = None
     DetalleCliente = None
 
-from sqlalchemy import select
+from prompts import system_prompt, comunicacion_humanizada_prompt
+
+from sqlalchemy import select, text
 
 load_dotenv()
 
@@ -34,7 +38,53 @@ class ConsultarClienteInput(BaseModel):
         description="RUC válido de la empresa (11 dígitos) para consultar reporte."
     )
 
+
 # --- Adaptación a herramientas asíncronas ---
+@tool
+async def obtener_esquema_db() -> str:
+    """
+    Devuelve el esquema técnico (DDL) de las tablas de clientes en la base de datos.
+    Úsalo CUANDO necesites saber qué tipos de datos contienen las tablas, 
+    antes de responder preguntas sobre la estructura de los datos o realizar consultas complejas.
+    """
+    if AsyncSessionLocal is None:
+        print("a"*200)
+        return "Error: No se pudo cargar la configuración de la base de datos."
+
+    async with AsyncSessionLocal() as db:
+        try:
+            # Query de introspección para obtener definiciones de tablas
+            # Filtra por tablas públicas que contengan 'cliente' en el nombre
+            query = text("""
+                    SELECT 'TABLE ' || table_name || ' (' || 
+                           string_agg(column_name || ' ' , ', ') || 
+                           ');' as table_definition
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                    AND table_name like '%cliente%'
+                    AND COLUMN_NAME not in ('id')
+                    GROUP BY table_name
+            """)
+            
+            result = await db.execute(query)
+            rows = result.fetchall()
+            
+            if not rows:
+                print("c"*200)
+                return "No se encontraron tablas en el base de datos."
+            
+            # Formateamos la salida para que el LLM la entienda claramente
+            print("-"*200)
+            print(type(rows), rows)
+            print("-"*200)
+            schema_definitions = "\n".join([str(row) for row in rows])
+            return f"Esquema actual de la base de datos:\n{schema_definitions}"
+            
+        except Exception as e:
+            print("b"*200, str(e))
+            return f"Error mientras se intentaba recuperar el esquema: {str(e)}"
+
+
 @tool(args_schema=DetalleClienteInput)
 async def detalle_cliente(nombre_empresa: str) -> str:
     """
@@ -55,13 +105,14 @@ async def detalle_cliente(nombre_empresa: str) -> str:
 
             if not cliente_ruc:
                 #print("1"*200)
-                return f"No contamos con el registro de RUC para la empresa '{nombre_empresa}'. Por favor, verifica el nombre o intenta con otro término de búsqueda."
+                return f"No contamos información de la empresa '{nombre_empresa}'. Por favor, verifica el nombre o intenta con otro término de búsqueda."
 
             return f"El RUC para '{nombre_empresa}' es: {cliente_ruc.ruc_empresa}. Ahora puedes usar este RUC con la herramienta 'consultar_cliente'."
 
         except Exception as e:
             #print("2"*200, str(e))
             return f"Error consultando detalles del cliente: {str(e)}"
+
 
 @tool(args_schema=ConsultarClienteInput)
 async def consultar_cliente(ruc_empresa: str) -> str:
@@ -90,17 +141,15 @@ async def consultar_cliente(ruc_empresa: str) -> str:
                 #print("5"*200)
                 return f"No se encontró información financiera para el RUC {ruc_empresa}. Si crees que es un error, intenta buscar el RUC de nuevo con 'detalle_cliente' para confirmar que sea el correcto."
 
-            hizo_compra_str = 'Sí' if cliente.hizo_compra else 'No'
-            
-            return f"""
-                Reporte para RUC {cliente.ruc_empresa}:
-                - Monto Transaccional: ${cliente.monto_transacciones}
-                - Saldo Activo: ${cliente.saldo_activo}
-                - Saldo Pasivo: ${cliente.saldo_pasivo}
-                - Uso App: {cliente.uso_de_app}
-                - Probabilidad Compra: {cliente.prediccion_compra}%
-                - ¿Cliente Comprador?: {hizo_compra_str}
-            """
+            return [
+                ('Monto Transaccional', cliente.monto_transacciones),
+                ('Saldo Activo', cliente.saldo_activo),
+                ('Saldo Pasivo', cliente.saldo_pasivo),
+                ('Uso App', cliente.uso_de_app),
+                ('Probabilidad Compra', cliente.prediccion_compra),
+                ('¿Cliente Comprador?', 'Sí' if cliente.hizo_compra else 'No')
+            ]
+
         except Exception as e:
             #print("6"*200)
             return f"Error recuperando datos financieros: {str(e)}"
@@ -108,19 +157,30 @@ async def consultar_cliente(ruc_empresa: str) -> str:
 
 # --- Configuración del Agente ---
 
-# Lista de herramientas. 
-toolkit = [consultar_cliente, detalle_cliente, TavilySearchResults()]
-
 # Modelo LLM
-llm = ChatOpenAI(model="gpt-4o", temperature=0)
+llm = ChatOpenAI(model="gpt-4o", temperature=0.5)
 
 # Memoria para mantener el contexto de la conversación (Checkpointer)
 memory = MemorySaver()
 
+# Lista de herramientas. 
+prompt_comunicacion = ChatPromptTemplate.from_template(comunicacion_humanizada_prompt)
+comunicacion_humanizada_chain = (prompt_comunicacion | llm | StrOutputParser())
+tool_comunicacion_humanizada= comunicacion_humanizada_chain.as_tool(
+        name="comunicacion_humanizada_chain",
+        description="Herramienta para redirigir las comunicaicones humanizadas de nuestro agente",
+    )
+
+tool_tavily = TavilySearchResults()
+toolkit = [consultar_cliente, detalle_cliente, tool_comunicacion_humanizada, obtener_esquema_db, tool_tavily]
+
+
 # Creación del Ejecutor del Agente usando create_agent
 agent_executor = create_agent(
     model=llm, 
+
     tools=toolkit, 
+    system_prompt= system_prompt,
     checkpointer=memory
 )
 
