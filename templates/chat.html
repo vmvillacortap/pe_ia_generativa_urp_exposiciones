@@ -16,7 +16,6 @@
         ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
 
-        /* Scrollbar oscura para el panel izquierdo */
         .dark-scroll::-webkit-scrollbar-thumb { background: #475569; }
         .dark-scroll::-webkit-scrollbar-thumb:hover { background: #64748B; }
 
@@ -35,37 +34,48 @@
 
         /* Estilos de Enlaces */
         .chat-link {
-            color: #2563EB; /* Blue-600 */
+            color: #2563EB;
             text-decoration: underline;
             word-break: break-all;
             transition: color 0.2s;
         }
         .chat-link:hover {
-            color: #1E40AF; /* Blue-800 */
+            color: #1E40AF;
             background-color: rgba(37, 99, 235, 0.1);
             border-radius: 2px;
         }
-        /* Enlaces en fondo oscuro */
         .dark-link {
-            color: #38BDF8; /* Sky-400 */
+            color: #38BDF8;
         }
         .dark-link:hover {
-            color: #7DD3FC; /* Sky-300 */
+            color: #7DD3FC;
         }
 
         /* Colores Corporativos */
         .klv-black { background-color: #0F172A; }
         .klv-blue { color: #004E92; }
         .bg-klv-gradient { background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); }
+
+        /* Transición para el Sidebar */
+        #monitor-sidebar {
+            transition: transform 0.3s ease-in-out, width 0.3s ease-in-out, opacity 0.2s ease-in-out;
+        }
+        .sidebar-collapsed {
+            width: 0 !important;
+            transform: translateX(-100%);
+            opacity: 0;
+            overflow: hidden;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body class="h-screen flex flex-col overflow-hidden text-gray-800">
 
     <header class="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-6 z-20 shadow-sm flex-shrink-0">
         <div class="flex items-center gap-4">
-            <div class="h-9 w-9 bg-slate-900 rounded-lg flex items-center justify-center shadow-lg">
-                <span class="text-white font-bold text-xl">K</span>
-            </div>
+            <button onclick="toggleSidebar()" class="h-9 w-9 bg-slate-900 rounded-lg flex items-center justify-center shadow-lg hover:bg-blue-600 transition-colors group">
+                <span class="text-white font-bold text-xl group-hover:scale-110 transition-transform">K</span>
+            </button>
             <span class="text-slate-900 font-bold text-lg tracking-tight">KLV BANK <span class="text-gray-400 font-light text-sm ml-1">| Workspace</span></span>
         </div>
         <div class="flex items-center gap-6">
@@ -82,13 +92,18 @@
         </div>
     </header>
 
-    <main class="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden relative">
+    <main class="flex-1 flex overflow-hidden relative">
         
-        <section class="lg:col-span-4 bg-slate-900 text-slate-300 overflow-y-auto dark-scroll border-r border-slate-800 flex flex-col">
+        <section id="monitor-sidebar" class="sidebar-collapsed w-full lg:w-1/3 xl:w-1/4 bg-slate-900 text-slate-300 overflow-y-auto dark-scroll border-r border-slate-800 flex flex-col shrink-0">
             <div class="p-6 border-b border-slate-800 sticky top-0 bg-slate-900/95 backdrop-blur z-10">
-                <div class="flex items-center gap-2 mb-1">
-                    <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                    <h2 class="text-sm font-bold uppercase tracking-wider text-slate-400">Monitor de Sistema</h2>
+                <div class="flex items-center justify-between mb-1">
+                    <div class="flex items-center gap-2">
+                        <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                        <h2 class="text-sm font-bold uppercase tracking-wider text-slate-400">Monitor de Sistema</h2>
+                    </div>
+                    <button onclick="toggleSidebar()" class="lg:hidden text-slate-500 hover:text-white">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
                 </div>
                 <h1 class="text-xl font-semibold text-white">Ejecución de Herramientas</h1>
             </div>
@@ -101,24 +116,14 @@
             </div>
         </section>
 
-        <section class="lg:col-span-8 bg-gray-50 overflow-y-auto p-8 md:p-12 relative">
-            
+        <section class="flex-1 bg-gray-50 overflow-y-auto p-8 md:p-12 relative">
             <div class="max-w-4xl mx-auto mb-12">
                 <h1 class="text-4xl font-light text-slate-900 mb-3">Hola, <span class="font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-700 to-sky-500">{{ user.name.split(' ')[0] }}</span>.</h1>
                 <p class="text-lg text-slate-500">Aquí tienes el registro de tus consultas recientes.</p>
             </div>
 
             <div id="history-container" class="max-w-4xl mx-auto grid grid-cols-1 gap-6">
-                <div class="animate-pulse flex space-x-4">
-                    <div class="flex-1 space-y-4 py-1">
-                        <div class="h-4 bg-gray-200 rounded w-3/4"></div>
-                        <div class="space-y-2">
-                            <div class="h-4 bg-gray-200 rounded"></div>
-                            <div class="h-4 bg-gray-200 rounded w-5/6"></div>
-                        </div>
-                    </div>
                 </div>
-            </div>
         </section>
 
     </main>
@@ -130,7 +135,6 @@
     </button>
 
     <div id="chat-popup" class="chat-popup fixed bottom-28 right-8 w-full md:w-[450px] h-[600px] max-h-[80vh] bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col z-40 overflow-hidden ring-1 ring-black/5">
-        
         <div class="bg-klv-gradient p-4 flex justify-between items-center text-white shrink-0">
             <div class="flex items-center gap-3">
                 <div class="relative">
@@ -151,7 +155,7 @@
 
         <div id="chat-box" class="flex-1 overflow-y-auto p-5 space-y-4 bg-slate-50">
             <div class="flex items-start">
-                <div class="bg-white border border-gray-200 text-gray-800 p-3.5 rounded-2xl rounded-tl-none shadow-sm text-sm max-w-[85%]">
+                <div class="bg-white border border-gray-200 text-gray-800 p-3.5 rounded-2xl rounded-tl-none shadow-sm text-sm max-w-[85%] whitespace-pre-line">
                     <p>👋 Hola. ¿En qué puedo ayudarte hoy con la base de datos?</p>
                 </div>
             </div>
@@ -173,99 +177,69 @@
     </div>
 
     <script>
-        // --- UTILIDAD: Detectar Enlaces ---
+        // --- NUEVO: Función Toggle Sidebar ---
+        function toggleSidebar() {
+            const sidebar = document.getElementById('monitor-sidebar');
+            sidebar.classList.toggle('sidebar-collapsed');
+        }
+
+        // --- Utilidades de Enlaces ---
         function makeLinksClickable(text) {
-            // Regex para detectar URLs que empiecen por http o https
             const urlRegex = /(https?:\/\/[^\\s]+)/g;
-            return text.replace(urlRegex, (url) => {
-                // stopPropagation evita que se cierre o expanda la tarjeta al hacer click
-                return `<a href="${url}" target="_blank" class="chat-link relative z-20" onclick="event.stopPropagation()">${url}</a>`;
-            });
+            return text.replace(urlRegex, (url) => `<a href="${url}" target="_blank" class="chat-link relative z-20" onclick="event.stopPropagation()">${url}</a>`);
         }
 
         function makeLinksClickableDark(text) {
              const urlRegex = /(https?:\/\/[^\\s]+)/g;
-             return text.replace(urlRegex, (url) => {
-                 return `<a href="${url}" target="_blank" class="chat-link dark-link relative z-20" onclick="event.stopPropagation()">${url}</a>`;
-             });
+             return text.replace(urlRegex, (url) => `<a href="${url}" target="_blank" class="chat-link dark-link relative z-20" onclick="event.stopPropagation()">${url}</a>`);
         }
 
-        // --- CARGAR HISTORIAL DE HERRAMIENTAS (PANEL IZQUIERDO) ---
+        // --- Carga de Herramientas ---
         async function loadToolsHistory() {
             try {
                 const res = await fetch('/api/toolshistory');
                 const tools = await res.json();
                 const container = document.getElementById('tools-container');
                 container.innerHTML = '';
-
                 if (tools.length === 0) {
                     container.innerHTML = '<p class="text-slate-500 text-sm italic">Sin actividad registrada.</p>';
                     return;
                 }
-
                 tools.forEach(tool => {
                     const card = document.createElement('div');
                     card.className = "bg-slate-800 rounded-lg p-4 border border-slate-700 hover:border-slate-600 transition-colors group";
-                    
-                    // MODIFICADO: Formateo de fecha forzado a GMT-5 (America/Lima)
-                    const timeStr = new Date(tool.timestamp).toLocaleTimeString('es-PE', {
-                        hour: '2-digit', 
-                        minute:'2-digit', 
-                        second:'2-digit',
-                        timeZone: 'America/Lima' // GMT-5
-                    });
-                    
-                    // Limpieza de argumentos (si es muy largo)
-                    let argsDisplay = makeLinksClickableDark(tool.args);
-
+                    const timeStr = new Date(tool.timestamp).toLocaleTimeString('es-PE', { hour: '2-digit', minute:'2-digit', second:'2-digit', timeZone: 'America/Lima' });
                     card.innerHTML = `
                         <div class="flex justify-between items-start mb-2">
                             <span class="text-xs font-bold text-sky-400 font-mono bg-sky-400/10 px-2 py-0.5 rounded border border-sky-400/20">${tool.name}</span>
                             <span class="text-[10px] text-slate-500 font-mono">${timeStr}</span>
                         </div>
                         <div class="text-xs text-slate-400 font-mono break-all leading-relaxed bg-slate-900/50 p-2 rounded border border-slate-800/50 group-hover:bg-slate-900 transition-colors">
-                            <span class="text-slate-500 select-none">>_ </span>${argsDisplay}
-                        </div>
-                    `;
+                            <span class="text-slate-500 select-none">>_ </span>${makeLinksClickableDark(tool.args)}
+                        </div>`;
                     container.appendChild(card);
                 });
-
-            } catch (e) {
-                console.error("Error tools history", e);
-            }
+            } catch (e) { console.error("Error tools history", e); }
         }
 
-        // --- CARGAR HISTORIAL DE CHAT (PANEL DERECHO) ---
+        // --- Carga de Historial ---
         async function loadHistory() {
             try {
                 const res = await fetch('/api/history');
                 const history = await res.json();
                 const container = document.getElementById('history-container');
                 container.innerHTML = '';
-
                 if (history.length === 0) {
                     container.innerHTML = '<p class="text-gray-400 italic">No hay consultas recientes.</p>';
                     return;
                 }
-
                 history.forEach(item => {
                     const card = document.createElement('div');
                     card.className = "bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300";
-                    
-                    // MODIFICADO: Formateo de fecha forzado a GMT-5 (America/Lima)
-                    const timeStr = new Date(item.timestamp).toLocaleTimeString('es-PE', {
-                        hour: '2-digit', 
-                        minute:'2-digit',
-                        timeZone: 'America/Lima' // GMT-5
-                    });
-                    
-                    // Procesar enlaces en la respuesta
+                    const timeStr = new Date(item.timestamp).toLocaleTimeString('es-PE', { hour: '2-digit', minute:'2-digit', timeZone: 'America/Lima' });
                     const fullResponseWithLinks = makeLinksClickable(item.response);
-                    
-                    // Lógica de truncado
                     const isLong = item.response.length > 150;
-                    const shortText = item.response.substring(0, 150) + "...";
-                    const shortTextWithLinks = makeLinksClickable(shortText);
+                    const shortTextWithLinks = makeLinksClickable(item.response.substring(0, 150) + "...");
 
                     card.innerHTML = `
                         <div class="flex items-center justify-between mb-4">
@@ -275,66 +249,34 @@
                             </div>
                             <span class="text-xs text-gray-400 font-medium">${timeStr}</span>
                         </div>
-                        
                         <h3 class="text-slate-900 font-semibold text-lg mb-3 leading-tight">"${item.query}"</h3>
-                        
                         <div class="text-slate-600 text-sm leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-100">
-                            <div id="resp-short-${item.id}" class="${isLong ? '' : 'hidden'}">
-                                ${shortTextWithLinks}
-                            </div>
-                            <div id="resp-full-${item.id}" class="${isLong ? 'hidden' : ''}">
-                                ${fullResponseWithLinks}
-                            </div>
+                            <div id="resp-short-${item.id}" class="${isLong ? '' : 'hidden'}">${shortTextWithLinks}</div>
+                            <div id="resp-full-${item.id}" class="${isLong ? 'hidden' : ''}">${fullResponseWithLinks}</div>
                         </div>
-                        
-                        ${isLong ? `
-                            <button onclick="toggleCard(${item.id})" class="mt-3 text-xs font-bold text-slate-800 hover:text-blue-600 flex items-center gap-1 group">
-                                <span id="btn-text-${item.id}">Ver respuesta completa</span>
-                                <svg id="icon-${item.id}" xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 transition-transform duration-300 group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
-                            </button>
-                        ` : ''}
-                    `;
+                        ${isLong ? `<button onclick="toggleCard(${item.id})" class="mt-3 text-xs font-bold text-slate-800 hover:text-blue-600 flex items-center gap-1 group"><span id="btn-text-${item.id}">Ver respuesta completa</span><svg id="icon-${item.id}" class="h-3 w-3 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg></button>` : ''}`;
                     container.appendChild(card);
                 });
-            } catch (e) {
-                console.error("Error cargando historial", e);
-            }
+            } catch (e) { console.error("Error cargando historial", e); }
         }
 
-        // --- INTERACCIÓN DE TARJETAS ---
         window.toggleCard = function(id) {
             const short = document.getElementById(`resp-short-${id}`);
             const full = document.getElementById(`resp-full-${id}`);
             const btnText = document.getElementById(`btn-text-${id}`);
-            const icon = document.getElementById(`icon-${id}`);
-            
             if (full.classList.contains('hidden')) {
-                // Mostrar todo
-                full.classList.remove('hidden');
-                short.classList.add('hidden');
-                btnText.innerText = 'Ocultar';
-                icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />';
+                full.classList.remove('hidden'); short.classList.add('hidden'); btnText.innerText = 'Ocultar';
             } else {
-                // Ocultar
-                full.classList.add('hidden');
-                short.classList.remove('hidden');
-                btnText.innerText = 'Ver respuesta completa';
-                icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />';
+                full.classList.add('hidden'); short.classList.remove('hidden'); btnText.innerText = 'Ver respuesta completa';
             }
         }
 
-        // --- LÓGICA DEL CHAT FLOTANTE ---
+        // --- Lógica de Chat ---
         const popup = document.getElementById('chat-popup');
         let isChatOpen = false;
-
         function toggleChat() {
             isChatOpen = !isChatOpen;
-            if(isChatOpen) {
-                popup.classList.add('active');
-                setTimeout(() => document.getElementById('msg-input').focus(), 300);
-            } else {
-                popup.classList.remove('active');
-            }
+            isChatOpen ? popup.classList.add('active') : popup.classList.remove('active');
         }
 
         const chatBox = document.getElementById('chat-box');
@@ -344,19 +286,9 @@
         function appendMessage(role, text) {
             const div = document.createElement('div');
             div.className = `flex items-start ${role === 'user' ? 'justify-end' : ''}`;
-            
             const bubble = document.createElement('div');
-            // Procesa enlaces
-            const textWithLinks = makeLinksClickable(text.replace(/\\n/g, '<br>'));
-
-            if (role === 'user') {
-                bubble.className = 'bg-slate-900 text-white p-3.5 rounded-2xl rounded-tr-none shadow-md text-sm max-w-[85%] leading-relaxed';
-                bubble.innerHTML = textWithLinks;
-            } else {
-                bubble.className = 'bg-white border border-gray-200 text-gray-800 p-3.5 rounded-2xl rounded-tl-none shadow-sm text-sm max-w-[85%] leading-relaxed';
-                bubble.innerHTML = textWithLinks;
-            }
-            
+            bubble.className = `${role === 'user' ? 'bg-slate-900 text-white' : 'bg-white border border-gray-200 text-gray-800'} p-3.5 rounded-2xl shadow-sm text-sm max-w-[85%] whitespace-pre-line`;
+            bubble.innerHTML = makeLinksClickable(text);
             div.appendChild(bubble);
             chatBox.appendChild(div);
             chatBox.scrollTop = chatBox.scrollHeight;
@@ -366,49 +298,31 @@
             e.preventDefault();
             const message = input.value.trim();
             if (!message) return;
-
             appendMessage('user', message);
             input.value = '';
             
-            const loadingDiv = document.createElement('div');
-            loadingDiv.id = 'loading';
-            loadingDiv.className = 'text-xs text-gray-400 ml-2 mb-2 flex items-center gap-2';
-            loadingDiv.innerHTML = '<div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div> Procesando consulta...';
-            chatBox.appendChild(loadingDiv);
+            const loading = document.createElement('div');
+            loading.id = 'loading';
+            loading.className = 'text-xs text-gray-400 ml-2 mb-2 flex items-center gap-2';
+            loading.innerHTML = '<div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div> Procesando...';
+            chatBox.appendChild(loading);
             chatBox.scrollTop = chatBox.scrollHeight;
 
             try {
-                const response = await fetch('/api/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: message })
-                });
-                const data = await response.json();
+                const res = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: message }) });
+                const data = await res.json();
                 document.getElementById('loading').remove();
-                
-                if (data.error) {
-                    appendMessage('ai', "⚠️ Hubo un error procesando la solicitud: " + data.error);
-                } else {
-                    appendMessage('ai', data.response);
-                }
-                
-                // Actualizar ambos historiales al recibir respuesta
-                loadHistory();
-                loadToolsHistory();
-
-            } catch (error) {
+                appendMessage('ai', data.error ? "⚠️ Error: " + data.error : data.response);
+                loadHistory(); loadToolsHistory();
+            } catch (error) { 
                 if(document.getElementById('loading')) document.getElementById('loading').remove();
-                appendMessage('ai', "⚠️ Error de conexión con el servidor.");
+                appendMessage('ai', "⚠️ Error de conexión.");
             }
         });
 
-        // Carga inicial
         loadHistory();
         loadToolsHistory();
-        
-        // Auto-refresh de herramientas cada 30 segundos (opcional)
         setInterval(loadToolsHistory, 30000);
-
     </script>
 </body>
 </html>
