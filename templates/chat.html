@@ -67,6 +67,31 @@
             overflow: hidden;
             pointer-events: none;
         }
+        /* --- NUEVOS ESTILOS PARA PDFs --- */
+    .klv-pdf-container { background-color: #ffffff; padding: 1.5rem; border-bottom: 1px solid #E5E7EB; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); margin-bottom: 1rem; }
+    .klv-pdf-header { font-size: 1.125rem; font-weight: 600; color: #1F2937; margin-bottom: 1rem; }
+    .klv-pdf-carousel { display: flex; overflow-x: auto; gap: 1rem; padding-bottom: 0.5rem; scroll-behavior: smooth; }
+    .klv-pdf-carousel::-webkit-scrollbar { height: 6px; }
+    .klv-pdf-carousel::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+
+    .klv-pdf-item { flex: 0 0 220px; background-color: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 0.5rem; padding: 1rem; display: flex; flex-direction: column; align-items: center; text-align: center; }
+    .klv-pdf-icon { width: 48px; height: 48px; background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M412 112v288c0 22-18 40-40 40h-232c-22 0-40-18-40-40v-288c0-22 18-40 40-40h232c22 0 40 18 40 40z" fill="%23EF4444"/><path d="M128 112c0-22 18-40 40-40h232c22 0 40 18 40 40v288c0 22-18 40-40 40h-232c-22 0-40-18-40-40v-288z" fill="%23EF4444"/><path d="M400 400c0 22-18 40-40 40h-232c-22 0-40-18-40-40v-288c0-22 18-40 40-40h232c22 0 40 18 40 40v288z" fill="%23F87171"/><path d="M213.3 160h176v16h-176v-16zm-32 32h16v16h-16v-16zm32 0h176v16h-176v-16zm-32 32h16v16h-16v-16zm32 0h176v16h-176v-16zm-32 32h16v16h-16v-16zm32 0h176v16h-176v-16zm-32 32h16v16h-16v-16zm32 0h176v16h-176v-16zm-32 32h16v16h-16v-16zm32 0h176v16h-176v-16zm-32 32h16v16h-16v-16zm32 0h176v16h-176v-16z" fill="%23fff"/></svg>'); background-size: contain; margin-bottom: 0.75rem; cursor: pointer; transition: transform 0.2s; }
+    .klv-pdf-icon:hover { transform: scale(1.05); }
+    .klv-pdf-name { font-size: 0.875rem; font-weight: 500; color: #2563EB; cursor: pointer; margin-bottom: 0.75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; text-decoration: none; }
+    .klv-pdf-name:hover { text-decoration: underline; }
+
+    .klv-pdf-form { width: 100%; display: flex; flex-direction: column; gap: 0.5rem; }
+    .klv-pdf-input { padding: 0.5rem; border: 1px solid #D1D5DB; border-radius: 0.375rem; font-size: 0.75rem; outline: none; transition: border-color 0.2s; }
+    .klv-pdf-input:focus { border-color: #3B82F6; }
+    .klv-pdf-btn { padding: 0.5rem; background-color: #10B981; color: white; border: none; border-radius: 0.375rem; cursor: pointer; font-size: 0.75rem; font-weight: 500; transition: background-color 0.2s; }
+    .klv-pdf-btn:hover { background-color: #059669; }
+    .klv-pdf-answer { font-size: 0.75rem; color: #4B5563; margin-top: 0.5rem; padding: 0.5rem; background-color: #E5E7EB; border-radius: 0.375rem; width: 100%; display: none; text-align: left; }
+
+    .klv-pdf-modal { display: none; position: fixed; z-index: 9999; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(17, 24, 39, 0.75); backdrop-filter: blur(4px); }
+    .klv-pdf-modal-content { background-color: white; margin: 2% auto; border-radius: 0.5rem; width: 90%; max-width: 1200px; height: 90vh; position: relative; display: flex; flex-direction: column; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); }
+    .klv-pdf-close { position: absolute; top: -15px; right: -15px; background: #EF4444; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; font-weight: bold; cursor: pointer; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); border: 2px solid white; z-index: 10000; }
+    .klv-pdf-close:hover { background: #DC2626; }
+    .klv-pdf-iframe { flex: 1; width: 100%; height: 100%; border: none; border-radius: 0.5rem; }
     </style>
 </head>
 <body class="h-screen flex flex-col overflow-hidden text-gray-800">
@@ -117,13 +142,31 @@
         </section>
 
         <section class="flex-1 bg-gray-50 overflow-y-auto p-8 md:p-12 relative">
+
+
+            <div class="klv-pdf-container">
+                    <h2 class="klv-pdf-header font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-700 to-sky-500">Hazle un pregunta a nuestro documentos registrados</h2>
+                    <div id="klv-pdf-carousel" class="klv-pdf-carousel">
+                        <p class="text-sm text-gray-500 italic">Cargando documentos...</p>
+                    </div>
+                </div>
+
+                <div id="klv-pdf-modal" class="klv-pdf-modal">
+                    <div class="klv-pdf-modal-content">
+                        <span class="klv-pdf-close" onclick="closeKlvPdfModal()">&times;</span>
+                        <iframe id="klv-pdf-iframe" class="klv-pdf-iframe" src="" title="Visor de PDF"></iframe>
+                    </div>
+                </div>
+
+
             <div class="max-w-4xl mx-auto mb-12">
                 <h1 class="text-4xl font-light text-slate-900 mb-3">Hola, <span class="font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-700 to-sky-500">{{ user.name.split(' ')[0] }}</span>.</h1>
                 <p class="text-lg text-slate-500">Aquí tienes el registro de tus consultas recientes.</p>
             </div>
 
             <div id="history-container" class="max-w-4xl mx-auto grid grid-cols-1 gap-6">
-                </div>
+            </div>
+
         </section>
 
     </main>
@@ -320,6 +363,121 @@
             }
         });
 
+        // --- NUEVA LÓGICA DE JAVASCRIPT PARA LOS PDFs ---
+        async function loadKlvPdfs() {
+            const carousel = document.getElementById('klv-pdf-carousel');
+            if (!carousel) return; 
+            carousel.innerHTML = ''; 
+
+            try {
+                const response = await fetch('/api/pdfs');
+                if (!response.ok) throw new Error('Error al cargar PDFs');
+                
+                const data = await response.json();
+                const pdfFileList = data.pdfs || [];
+
+                if (pdfFileList.length === 0) {
+                    carousel.innerHTML = '<p class="text-sm text-gray-500">No hay documentos PDF disponibles.</p>';
+                    return;
+                }
+
+                pdfFileList.forEach(pdfName => {
+                    const itemDiv = document.createElement('div');
+                    itemDiv.className = 'klv-pdf-item';
+
+                    const iconDiv = document.createElement('div');
+                    iconDiv.className = 'klv-pdf-icon';
+                    iconDiv.onclick = () => openKlvPdfModal(pdfName);
+
+                    const nameDiv = document.createElement('div');
+                    nameDiv.className = 'klv-pdf-name';
+                    nameDiv.textContent = pdfName;
+                    nameDiv.title = pdfName;
+                    nameDiv.onclick = () => openKlvPdfModal(pdfName);
+
+                    const formEl = document.createElement('form');
+                    formEl.className = 'klv-pdf-form';
+                    formEl.onsubmit = (e) => handleKlvPdfQuestion(e, pdfName, answerDiv);
+
+                    const inputEl = document.createElement('input');
+                    inputEl.type = 'text';
+                    inputEl.className = 'klv-pdf-input';
+                    inputEl.placeholder = 'Preguntar a este PDF...';
+                    inputEl.required = true;
+
+                    const buttonEl = document.createElement('button');
+                    buttonEl.type = 'submit';
+                    buttonEl.className = 'klv-pdf-btn';
+                    buttonEl.textContent = 'Consultar';
+
+                    const answerDiv = document.createElement('div');
+                    answerDiv.className = 'klv-pdf-answer';
+
+                    formEl.appendChild(inputEl);
+                    formEl.appendChild(buttonEl);
+                    itemDiv.appendChild(iconDiv);
+                    itemDiv.appendChild(nameDiv);
+                    itemDiv.appendChild(formEl);
+                    itemDiv.appendChild(answerDiv);
+
+                    carousel.appendChild(itemDiv);
+                });
+            } catch (error) {
+                console.error('Error al cargar PDFs:', error);
+                carousel.innerHTML = '<p class="text-sm text-red-500">Error al cargar la lista de documentos.</p>';
+            }
+        }
+
+        async function handleKlvPdfQuestion(event, pdfName, answerDiv) {
+            event.preventDefault();
+            const inputElement = event.target.querySelector('.klv-pdf-input');
+            const question = inputElement.value;
+            inputElement.value = ''; 
+            
+            answerDiv.style.display = 'block';
+            answerDiv.innerHTML = '<span class="animate-pulse">Consultando...</span>';
+
+            try {
+                const response = await fetch('/api/pdf_question', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pdf_name: pdfName, question: question })
+                });
+
+                if (!response.ok) throw new Error('Error en el servidor');
+                const data = await response.json();
+                
+                answerDiv.innerHTML = `<strong>R:</strong> ${data.message}`;
+
+            } catch (error) {
+                console.error('Error:', error);
+                answerDiv.innerHTML = '<span class="text-red-500">Error al procesar la pregunta.</span>';
+            }
+        }
+
+        const klvPdfModal = document.getElementById('klv-pdf-modal');
+        const klvPdfIframe = document.getElementById('klv-pdf-iframe');
+
+        function openKlvPdfModal(pdfName) {
+            klvPdfIframe.src = `/pdf/${encodeURIComponent(pdfName)}`;
+            klvPdfModal.style.display = "block";
+            document.body.style.overflow = "hidden"; 
+        }
+
+        function closeKlvPdfModal() {
+            klvPdfModal.style.display = "none";
+            klvPdfIframe.src = ""; 
+            document.body.style.overflow = "auto"; 
+        }
+
+        window.onclick = function(event) {
+            if (event.target == klvPdfModal) {
+                closeKlvPdfModal();
+            }
+        }
+
+        // Llamamos a la función de PDFs al final de tu script
+        loadKlvPdfs();
         loadHistory();
         loadToolsHistory();
         setInterval(loadToolsHistory, 30000);

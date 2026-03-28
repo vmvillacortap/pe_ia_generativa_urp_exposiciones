@@ -166,6 +166,7 @@ memory = MemorySaver()
 # Lista de herramientas. 
 prompt_comunicacion = ChatPromptTemplate.from_template(comunicacion_humanizada_prompt)
 comunicacion_humanizada_chain = (prompt_comunicacion | llm | StrOutputParser())
+
 tool_comunicacion_humanizada= comunicacion_humanizada_chain.as_tool(
         name="comunicacion_humanizada_chain",
         description="Herramienta para redirigir las comunicaicones humanizadas de nuestro agente",
