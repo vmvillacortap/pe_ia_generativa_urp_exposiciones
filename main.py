@@ -119,6 +119,12 @@ async def chat_page(request: Request):
     if not user: return RedirectResponse(url='/login')
     return templates.TemplateResponse("chat.html", {"request": request, "user": user})
 
+@app.get("/upload/pdf/", response_class=HTMLResponse)
+async def upload_page(request: Request):
+    """Ruta que sirve la vista dedicada para subir e indexar PDFs."""
+    
+    return templates.TemplateResponse("upload.html", {"request": request})
+
 # --- API del Agente ---
 @app.post("/api/chat")
 async def chat_endpoint(request: Request, db: AsyncSession = Depends(get_db)):
@@ -243,7 +249,7 @@ class PDFQuestionRequest(BaseModel):
 @app.post("/api/pdf_question")
 async def ask_pdf_question(request: PDFQuestionRequest):
     """Endpoint para recibir preguntas sobre un PDF específico."""
-    inddex_name = request.pdf_name.replace('-', '_').replace('.pdf', '_index')
+    inddex_name = request.pdf_name.replace('-', '_').replace('.pdf', '_index').lower()
 
 
     vector_store = ElasticsearchStore(
@@ -285,10 +291,32 @@ async def simulate_elasticsearch_indexing(file_path: str):
     file_name = os.path.basename(file_path)
     print(f"DEBUG: Iniciando indexación simulada en Elasticsearch para: {file_name}")
     
-    # Simulamos un proceso pesado de RAG/Embeddings (3 segundos)
-    # En producción, esto no debe bloquear el hilo principal.
-    await asyncio.sleep(3) 
+    # 1. Lector de LlamaIndex
+    reader = PDFReader()
     
+    # 2. Cargamos la data. Esto devuelve una lista de objetos 'Document' 
+    # (normalmente un 'Document' por cada página del PDF)
+    documents = reader.load_data(file=file_path)
+    
+    os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
+    embed_model = OpenAIEmbedding()
+
+    # Fragmentación semántica
+    semantic_splitter = SemanticSplitterNodeParser(embed_model=embed_model, buffer_size=1, breakpoint_percentile_threshold=95)
+    nodes = semantic_splitter.get_nodes_from_documents(documents)
+
+    inddex_name = file_name.replace('-', '_').replace('.pdf', '_index').lower()
+
+    vectore_store_read = ElasticsearchStore(
+        es_url=os.getenv("ELASTIC_URL"),
+        es_user=os.getenv("ELASTIC_USER"),
+        es_password=os.getenv("ELASTIC_PASS"),
+        index_name=inddex_name,
+    )
+    
+    storage_context = StorageContext.from_defaults(vector_store=vectore_store_read)
+    index = VectorStoreIndex(nodes, storage_context=storage_context)
+
     print(f"DEBUG: Indexación finalizada exitosamente para: {file_name}")
     # Aquí devolverías True o lanzarías una excepción si falla
 

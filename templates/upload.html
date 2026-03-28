@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subir PDF - NEXO Workspace</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #F3F4F6; }
+        
+        /* Caja de subida */
+        .klv-upload-box { border: 2px dashed #CBD5E1; border-radius: 0.75rem; background-color: #ffffff; transition: all 0.2s ease; cursor: pointer; }
+        .klv-upload-box:hover { border-color: #3B82F6; background-color: #F8FAFC; }
+        
+        /* Spinner animado */
+        .klv-spinner { border: 4px solid rgba(203, 213, 225, 0.3); border-top: 4px solid #3B82F6; border-radius: 50%; width: 48px; height: 48px; animation: klv-spin 1s linear infinite; margin: 0 auto; }
+        @keyframes klv-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Modal de Sobreescritura (Reutilizado de tu diseño) */
+        .klv-modal { display: none; position: fixed; z-index: 50; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(17, 24, 39, 0.6); backdrop-filter: blur(2px); }
+        .klv-modal-content { background-color: white; margin: 15% auto; padding: 1.5rem; border-radius: 0.5rem; width: 90%; max-width: 400px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); text-align: center; }
+    </style>
+</head>
+<body class="flex flex-col h-screen">
+
+    <header class="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+        <h1 class="text-xl font-semibold text-gray-800">KLV Workspace <span class="text-gray-400 font-normal text-sm ml-2">| Subir Documento</span></h1>
+        <a href="/" class="text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors">Volver al Chat</a>
+    </header>
+
+    <main class="flex-1 flex items-center justify-center p-6">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 w-full max-w-lg p-8">
+            
+            <div id="state-upload" class="flex flex-col text-center">
+                <h2 class="text-lg font-semibold text-gray-800 mb-2">Agregar nuevo PDF</h2>
+                <p class="text-sm text-gray-500 mb-6">El documento será procesado e indexado automáticamente para su consulta en el chat.</p>
+                
+                <input type="file" id="pdf-file-input" class="hidden" accept=".pdf">
+                
+                <div class="klv-upload-box p-10 flex flex-col items-center justify-center" onclick="document.getElementById('pdf-file-input').click()">
+                    <svg class="w-12 h-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                    <span class="text-sm font-medium text-gray-700">Haz clic para buscar en tu PC</span>
+                    <span class="text-xs text-gray-400 mt-1">Solo archivos .pdf</span>
+                </div>
+                <div id="upload-error" class="mt-4 text-sm text-red-600 hidden"></div>
+            </div>
+
+            <div id="state-loading" class="hidden flex-col text-center py-8">
+                <div class="klv-spinner mb-4"></div>
+                <h3 class="text-md font-medium text-gray-800">Procesando documento...</h3>
+                <p class="text-sm text-gray-500 mt-2">Por favor espera. Estamos guardando e indexando el contenido en Elasticsearch.</p>
+            </div>
+
+            <div id="state-success" class="hidden flex-col text-center py-6">
+                <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-800 mb-2">¡Archivo agregado con éxito!</h3>
+                <p id="success-message" class="text-sm text-gray-500 mb-8">El documento ya está disponible para el agente de IA.</p>
+                
+                <div class="flex gap-4 justify-center">
+                    <button onclick="resetUploadForm()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors">Subir otro PDF</button>
+                    <a href="/" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm">Ir al Proyecto</a>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <div id="overwrite-modal" class="klv-modal">
+        <div class="klv-modal-content">
+            <h3 class="font-semibold text-lg text-gray-900 mb-2">Archivo existente</h3>
+            <p id="overwrite-message" class="text-sm text-gray-600 mb-6">¿Deseas sobreescribir el archivo?</p>
+            <div class="flex justify-center gap-3">
+                <button onclick="handleOverwrite(false)" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors">Cancelar</button>
+                <button onclick="handleOverwrite(true)" class="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors">Sí, sobreescribir</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Elementos de la UI
+        const stateUpload = document.getElementById('state-upload');
+        const stateLoading = document.getElementById('state-loading');
+        const stateSuccess = document.getElementById('state-success');
+        const fileInput = document.getElementById('pdf-file-input');
+        const errorDiv = document.getElementById('upload-error');
+        const modal = document.getElementById('overwrite-modal');
+        
+        let pendingFile = null;
+
+        // Escuchar selección de archivo
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            if (!file.name.toLowerCase().endsWith('.pdf')) {
+                showError("Por favor, selecciona únicamente un archivo PDF.");
+                fileInput.value = '';
+                return;
+            }
+
+            pendingFile = file;
+            errorDiv.classList.add('hidden');
+            processUpload(file, false);
+        });
+
+        // Lógica principal de subida
+        async function processUpload(file, overwrite) {
+            // Cambiar vista a "Cargando"
+            stateUpload.classList.add('hidden');
+            stateLoading.classList.remove('hidden');
+            stateLoading.classList.add('flex');
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('overwrite', overwrite);
+
+            try {
+                const response = await fetch('/api/upload_pdf', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                // Manejo de archivo duplicado (409 Conflict)
+                if (response.status === 409) {
+                    const data = await response.json();
+                    // Ocultamos la carga, volvemos al formulario base y abrimos modal
+                    stateLoading.classList.add('hidden');
+                    stateLoading.classList.remove('flex');
+                    stateUpload.classList.remove('hidden');
+                    
+                    document.getElementById('overwrite-message').textContent = data.message;
+                    modal.style.display = 'block';
+                    return;
+                }
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Error en el servidor durante la subida.');
+                }
+
+                const data = await response.json();
+                
+                // Mostrar vista de éxito
+                stateLoading.classList.add('hidden');
+                stateLoading.classList.remove('flex');
+                stateSuccess.classList.remove('hidden');
+                stateSuccess.classList.add('flex');
+                
+                // Limpiar el input
+                fileInput.value = '';
+                pendingFile = null;
+
+            } catch (error) {
+                console.error('Error:', error);
+                // Volver a la vista de formulario con el error
+                stateLoading.classList.add('hidden');
+                stateLoading.classList.remove('flex');
+                stateUpload.classList.remove('hidden');
+                showError(error.message);
+                fileInput.value = '';
+            }
+        }
+
+        // Manejo de la decisión del modal de sobreescritura
+        function handleOverwrite(confirm) {
+            modal.style.display = 'none';
+            if (confirm && pendingFile) {
+                processUpload(pendingFile, true);
+            } else {
+                pendingFile = null;
+                fileInput.value = '';
+            }
+        }
+
+        // Mostrar errores en el formulario
+        function showError(msg) {
+            errorDiv.textContent = msg;
+            errorDiv.classList.remove('hidden');
+        }
+
+        // Resetear la vista para subir otro archivo
+        function resetUploadForm() {
+            stateSuccess.classList.add('hidden');
+            stateSuccess.classList.remove('flex');
+            stateUpload.classList.remove('hidden');
+            errorDiv.classList.add('hidden');
+        }
+    </script>
+</body>
+</html>

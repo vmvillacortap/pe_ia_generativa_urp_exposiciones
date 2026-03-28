@@ -10,6 +10,9 @@ from langgraph.checkpoint.memory import MemorySaver
 from pydantic import BaseModel, Field, ConfigDict
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
+from llama_index.core import VectorStoreIndex
+from llama_index.vector_stores.elasticsearch import ElasticsearchStore
+from elasticsearch import Elasticsearch
 try:
     from database import AsyncSessionLocal, ClienteEmpresa, DetalleCliente
 except ImportError:
@@ -155,6 +158,111 @@ async def consultar_cliente(ruc_empresa: str) -> str:
             return f"Error recuperando datos financieros: {str(e)}"
 
 
+# --- Herramienta para Consultar PDFs en Elasticsearch ---
+
+class ConsultarPDFInput(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    pdf_name: str = Field(
+        ..., 
+        description="Nombre exacto del archivo PDF con su extensión, por ejemplo: 'ley-26702-general-sistema-financiero-sbs.pdf'"
+    )
+    pregunta: str = Field(
+        ..., 
+        description="La pregunta detallada que se desea responder utilizando la información del documento."
+    )
+
+def verify_index_exists_local(es_url: str, es_user: str, es_password: str, index_name: str) -> bool:
+    """Función auxiliar para verificar la existencia del índice sin levantar LlamaIndex completo."""
+    try:
+        es_client = Elasticsearch(es_url, basic_auth=(es_user, es_password))
+        existe = es_client.indices.exists(index=index_name)
+        es_client.close()
+        return existe
+    except Exception as e:
+        return False
+
+@tool("consultar_documento_pdf", args_schema=ConsultarPDFInput)
+def consultar_documento_pdf(pdf_name: str, pregunta: str) -> str:
+    """
+    Consulta información específica dentro de un documento PDF que ha sido indexado en la base de datos vectorial.
+    Útil para responder preguntas detalladas sobre leyes, manuales, reportes o documentos técnicos del proyecto.
+    """
+    try:
+        # Formatear el nombre del índice siguiendo tu convención en main.py
+        index_name = pdf_name.replace('-', '_').replace('.pdf', '_index').lower()
+        
+        # Recuperar variables de entorno (Asegúrate de tenerlas en tu archivo .env)
+        es_url = os.getenv("ELASTIC_URL")
+        es_user = os.getenv("ELASTIC_USER")
+        es_password = os.getenv("ELASTIC_PASS")
+        
+        # 1. Verificamos si el índice ya fue creado (si el documento ya se procesó)
+        if not verify_index_exists_local(es_url, es_user, es_password, index_name):
+            return f"Lo siento ERROR, el documento '{pdf_name}' aún no ha sido indexado o no se encuentra en la base de datos. Pide al usuario que lo suba primero."
+        
+        # 2. Conexión al Vector Store existente
+        vector_store = ElasticsearchStore(
+            es_url=es_url,
+            es_user=es_user,
+            es_password=es_password,
+            index_name=index_name,
+        )
+        
+        # 3. Cargar el índice de LlamaIndex
+        index = VectorStoreIndex.from_vector_store(vector_store=vector_store)
+        
+        # 4. Configurar el motor de búsqueda
+        query_engine = index.as_query_engine(similarity_top_k=3)
+        
+        # 5. Ejecutar la consulta contra los fragmentos del PDF
+        respuesta = query_engine.query(pregunta)
+        
+        return str(respuesta.response)
+        
+    except Exception as e:
+        return f"Ocurrió un error interno al intentar consultar el documento {pdf_name}: {str(e)}"
+
+
+# --- Herramienta para Listar PDFs Disponibles ---
+
+class ListarPDFsInput(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    # LangChain a veces requiere al menos un argumento en los esquemas Pydantic para las tools,
+    # así que agregamos un dummy por seguridad.
+    consulta: str = Field(
+        default="listar", 
+        description="Parámetro por defecto. Enviar simplemente la palabra 'listar'."
+    )
+
+@tool("listar_documentos_pdf", args_schema=ListarPDFsInput)
+def listar_documentos_pdf(consulta: str = "listar") -> str:
+    """
+    Obtiene el listado exacto de todos los documentos PDF que están subidos y disponibles 
+    en el sistema para ser consultados. Útil cuando el usuario pregunta qué documentos, 
+    leyes o archivos hay disponibles en el proyecto.
+    """
+    try:
+        # Definimos la ruta a la carpeta 'pdfs' al igual que en main.py
+        pdf_directory = os.path.join(os.path.dirname(__file__), "pdfs")
+        
+        if not os.path.exists(pdf_directory):
+            return "El directorio de documentos aún no ha sido creado o no hay PDFs disponibles."
+            
+        # Leemos los archivos y filtramos solo los .pdf
+        files = sorted([f for f in os.listdir(pdf_directory) if f.lower().endswith('.pdf')])
+        
+        if not files:
+            return "Actualmente no hay ningún documento PDF subido en el sistema."
+            
+        # Formateamos la lista para que el LLM la lea claramente
+        lista_archivos = "\n".join([f"- {f}" for f in files])
+        return f"Los siguientes documentos PDF están disponibles para consulta:\n{lista_archivos}"
+        
+    except Exception as e:
+        return f"Ocurrió un error al intentar leer el directorio de documentos: {str(e)}"
+
+
+
 # --- Configuración del Agente ---
 
 # Modelo LLM
@@ -173,7 +281,15 @@ tool_comunicacion_humanizada= comunicacion_humanizada_chain.as_tool(
     )
 
 tool_tavily = TavilySearchResults()
-toolkit = [consultar_cliente, detalle_cliente, tool_comunicacion_humanizada, obtener_esquema_db, tool_tavily]
+toolkit = [
+    consultar_cliente, 
+    detalle_cliente, 
+    tool_comunicacion_humanizada, 
+    obtener_esquema_db, 
+    tool_tavily,
+    consultar_documento_pdf,
+    listar_documentos_pdf
+]
 
 
 # Creación del Ejecutor del Agente usando create_agent
